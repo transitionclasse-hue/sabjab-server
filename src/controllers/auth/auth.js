@@ -1,32 +1,8 @@
 import { Customer, DeliveryPartner } from '../../models/user.js';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-/* =====================================================
-   HOSTINGER SMTP (RENDER FRIENDLY CONFIG)
-===================================================== */
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.hostinger.com",
-  port: 587,          // ⚡ STARTTLS (better for Render)
-  secure: false,      // MUST be false for 587
-  requireTLS: true,
-
-  auth: {
-    user: process.env.EMAIL_USER, // help@sabjab.com
-    pass: process.env.EMAIL_PASS, // mailbox password
-  },
-
-  tls: {
-    rejectUnauthorized: false,
-  },
-
-  logger: true,
-  debug: true,
-});
 
 /* =====================================================
    TOKEN GENERATION
@@ -57,10 +33,10 @@ export const requestEmailOtp = async (req, reply) => {
     const { phone, email } = req.body;
 
     if (!phone || !email) {
-      return reply.status(400).send({ message: "Required" });
+      return reply.status(400).send({ message: "Phone and email required" });
     }
 
-    // Duplicate email check
+    // Prevent duplicate email
     const existingUser = await Customer.findOne({ email });
     if (existingUser && existingUser.phone !== phone) {
       return reply
@@ -82,24 +58,30 @@ export const requestEmailOtp = async (req, reply) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    /* ---------- SMTP VERIFY (DEBUG STEP) ---------- */
-    await transporter.verify();
-    console.log("✅ SMTP connected successfully");
+    /* =====================================================
+       SEND OTP VIA HOSTINGER MAIL API
+    ===================================================== */
 
-    /* ---------- SEND EMAIL ---------- */
-    const info = await transporter.sendMail({
-      from: `"SabJab Secure" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your Verification Code",
-      text: `Your login OTP is: ${otp}\n\nThis OTP expires in 5 minutes.`,
+    const response = await fetch("https://sabjab.com/send-otp.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, otp }),
     });
 
-    console.log("✅ Email sent:", info.messageId);
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error("Hostinger mail failed");
+    }
+
+    console.log("✅ OTP email sent");
 
     return reply.send({ message: "OTP sent successfully" });
 
   } catch (error) {
-    console.error("❌ SMTP FULL ERROR:", error);
+    console.error("❌ OTP EMAIL ERROR:", error);
     return reply.status(500).send({
       message: "Email Failed",
       error: error.message,
@@ -122,12 +104,11 @@ export const verifyOtp = async (req, reply) => {
       customer.otp !== otp ||
       customer.otpExpires < Date.now()
     ) {
-      return reply.status(400).send({ message: "Invalid/Expired OTP" });
+      return reply.status(400).send({ message: "Invalid or expired OTP" });
     }
 
     customer.otp = undefined;
     customer.isActivated = true;
-
     await customer.save();
 
     return reply.send({
