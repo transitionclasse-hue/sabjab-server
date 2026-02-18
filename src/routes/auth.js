@@ -1,18 +1,21 @@
 import { 
-    fetchUser, 
-    loginCustomer, 
+    requestEmailOtp, 
+    verifyOtp, 
     loginDeliveryPartner, 
-    refreshToken 
-} from "../controllers/auth/auth.js"; //
-import { updateUser } from "../controllers/tracking/user.js"; //
-import { verifyToken } from "../middleware/auth.js"; //
+    refreshToken, 
+    fetchUser 
+} from "../controllers/auth/auth.js";
+import { verifyToken } from "../middleware/auth.js"; // Standard JWT middleware
 
-export const authRoutes = async (fastify, options) => {
-    fastify.post("/customer/login", loginCustomer); //
-    fastify.post("/delivery/login", loginDeliveryPartner); //
-    fastify.post("/refresh-token", refreshToken); //
-    
-    // Protected Routes (Require verifyToken)
-    fastify.get("/user", { preHandler: [verifyToken] }, fetchUser); //
-    fastify.patch("/user", { preHandler: [verifyToken] }, updateUser); //
+export const authRoutes = async (fastify) => {
+    // Customer Endpoints
+    fastify.post("/customer/request-otp", requestEmailOtp);
+    fastify.post("/customer/verify-otp", verifyOtp);
+
+    // Delivery Partner Endpoint
+    fastify.post("/delivery/login", loginDeliveryPartner);
+
+    // System Endpoints
+    fastify.post("/refresh-token", refreshToken);
+    fastify.get("/user", { preHandler: [verifyToken] }, fetchUser);
 };
