@@ -1,84 +1,78 @@
-import { Customer, DeliveryPartner } from '../../models/user.js';
-import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
-dotenv.config();
+import React, { useState, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, TouchableWithoutFeedback, Keyboard } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import client from "../../api/client"; 
 
-// ================= HOSTINGER VERIFIED SMTP =================
-const transporter = nodemailer.createTransport({
-  host: "smtp.hostinger.com", //
-  port: 465,                  //
-  secure: true,               //
-  auth: {
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS, 
-  },
-  tls: { rejectUnauthorized: false },
-  family: 4,                  // Forces IPv4 to prevent 30s timeouts
-  debug: true,                
-  logger: true 
+export default function OtpScreen({ route, navigation }) {
+  const { phone } = route?.params || {};
+  const [otp, setOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+
+  const handleRequestEmailOtp = async () => {
+    setLoading(true);
+    try {
+      await client.post("/customer/request-otp", { phone, email });
+      Alert.alert("Success", "Check your email for the code.");
+      inputRef.current?.focus();
+    } catch (e) { 
+      const msg = e.response?.data?.message || e.message;
+      Alert.alert("Connection Problem", msg); 
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Authenticate</Text>
+            <Text style={styles.subtitle}>+91 {phone}</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput value={email} onChangeText={setEmail} style={styles.input} placeholder="email@work.com" placeholderTextColor="#555" />
+                <TouchableOpacity onPress={handleRequestEmailOtp}>
+                  {loading ? <ActivityIndicator size="small" color="#FFB300" /> : <Text style={styles.getBtn}>Get Code</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity activeOpacity={1} onPress={() => inputRef.current?.focus()} style={styles.otpSection}>
+              <Text style={styles.label}>PASSCODE / OTP</Text>
+              <View style={styles.otpContainer}>
+                {[0,1,2,3].map(i => (
+                  <View key={i} style={[styles.otpBox, { borderColor: otp.length === i ? '#FFB300' : '#333' }]}>
+                    <Text style={styles.otpText}>{otp[i] || ""}</Text>
+                  </View>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}><Text style={{ color: '#666' }}>Try SMS  |  Help</Text></View>
+          <TextInput ref={inputRef} value={otp} onChangeText={setOtp} maxLength={4} keyboardType="number-pad" style={{ opacity: 0, height: 0 }} />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, padding: 25 },
+  title: { color: '#FFF', fontSize: 32, fontWeight: '900' },
+  subtitle: { color: '#666', fontSize: 16, marginTop: 5 },
+  inputGroup: { marginTop: 40 },
+  label: { color: '#666', fontSize: 11, fontWeight: '800', marginBottom: 10 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', height: 60, borderRadius: 15, paddingHorizontal: 15 },
+  input: { flex: 1, color: '#FFF' },
+  getBtn: { color: '#FFB300', fontWeight: '700' },
+  otpSection: { marginTop: 30 },
+  otpContainer: { flexDirection: 'row', justifyContent: 'space-between' },
+  otpBox: { width: '22%', aspectRatio: 1, borderRadius: 15, borderWidth: 1, backgroundColor: '#1C1C1E', justifyContent: 'center', alignItems: 'center' },
+  otpText: { color: '#FFF', fontSize: 28, fontWeight: '800' },
+  footer: { alignItems: 'center', paddingBottom: 20 }
 });
-
-const generateTokens = (user) => {
-  const accessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1d' });
-  const refreshToken = jwt.sign({ userId: user._id, role: user.role }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
-  return { accessToken, refreshToken };
-};
-
-export const requestEmailOtp = async (req, reply) => {
-  try {
-    const { phone, email } = req.body;
-    if (!phone || !email) return reply.status(400).send({ message: "Required" });
-
-    // Handle duplicate emails to avoid DuplicateKey crashes
-    const existingUser = await Customer.findOne({ email });
-    if (existingUser && existingUser.phone !== phone) {
-      return reply.status(400).send({ message: "This email belongs to another account." });
-    }
-
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    await Customer.findOneAndUpdate(
-      { phone },
-      { email, otp, otpExpires: Date.now() + 300000, role: "Customer" },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    await transporter.sendMail({
-      from: `"SabJab Secure" <${process.env.EMAIL_USER}>`, 
-      to: email,
-      subject: "Verification Code",
-      text: `Your login code is ${otp}`
-    });
-    return reply.send({ message: "OTP sent successfully" });
-  } catch (error) {
-    return reply.status(500).send({ message: "Email Failed", error: error.message });
-  }
-};
-
-export const verifyOtp = async (req, reply) => {
-  try {
-    const { phone, otp } = req.body;
-    const customer = await Customer.findOne({ phone });
-    if (!customer || customer.otp !== otp || customer.otpExpires < Date.now()) {
-      return reply.status(400).send({ message: "Invalid or expired OTP" });
-    }
-    customer.otp = undefined;
-    customer.otpExpires = undefined;
-    customer.isActivated = true;
-    await customer.save();
-    return reply.send({ message: "Login Successful", ...generateTokens(customer), customer });
-  } catch (error) {
-    return reply.status(500).send({ message: "Error", error: error.message });
-  }
-};
-
-// --- CRITICAL EXPORTS FOR DEPLOYMENT ---
-export const fetchUser = async (req, reply) => {
-  try {
-    const user = await Customer.findById(req.user.userId) || await DeliveryPartner.findById(req.user.userId);
-    return reply.send({ user });
-  } catch (error) { return reply.status(500).send({ message: "Error" }); }
-};
-
-export const loginDeliveryPartner = async (req, reply) => { /* Logic */ };
-export const refreshToken = async (req, reply) => { /* Logic */ };
