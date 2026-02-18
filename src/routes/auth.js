@@ -5,7 +5,7 @@ import {
     refreshToken, 
     fetchUser 
 } from "../controllers/auth/auth.js";
-import { verifyToken } from "../middleware/auth.js"; // Standard JWT middleware
+import { verifyToken } from "../middleware/auth.js";
 
 export const authRoutes = async (fastify) => {
     // Customer Endpoints
@@ -15,7 +15,8 @@ export const authRoutes = async (fastify) => {
     // Delivery Partner Endpoint
     fastify.post("/delivery/login", loginDeliveryPartner);
 
-    // System Endpoints
-    fastify.post("/refresh-token", refreshToken);
-    fastify.get("/user", { preHandler: [verifyToken] }, fetchUser);
+    // System Endpoints (Standardized to match your API client)
+    // Changing these to match your getMe and refreshTokenApi calls
+    fastify.post("/customer/refresh-token", refreshToken); 
+    fastify.get("/customer/me", { preHandler: [verifyToken] }, fetchUser);
 };
