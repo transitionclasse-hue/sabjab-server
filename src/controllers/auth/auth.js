@@ -30,7 +30,10 @@ const generateTokens = (user) => {
 
 export const requestEmailOtp = async (req, reply) => {
   try {
-    const { phone, email } = req.body;
+
+    // ⭐ FIXED (normalize types)
+    const phone = Number(req.body.phone);
+    const email = String(req.body.email).trim().toLowerCase();
 
     if (!phone || !email) {
       return reply.status(400).send({
@@ -41,7 +44,11 @@ export const requestEmailOtp = async (req, reply) => {
     /* ---------- CHECK DUPLICATE EMAIL ---------- */
     const existingUser = await Customer.findOne({ email });
 
-    if (existingUser && existingUser.phone !== phone) {
+    // ⭐ FIXED COMPARISON
+    if (
+      existingUser &&
+      Number(existingUser.phone) !== Number(phone)
+    ) {
       return reply.status(400).send({
         message: "Email already linked to another number."
       });
@@ -77,7 +84,6 @@ export const requestEmailOtp = async (req, reply) => {
         body: JSON.stringify({ email, otp }),
       });
 
-      // SAFE RESPONSE HANDLING
       const raw = await response.text();
       console.log("📩 Mail API response:", raw);
 
@@ -97,10 +103,9 @@ export const requestEmailOtp = async (req, reply) => {
 
     } catch (mailError) {
       console.error("⚠️ Mail API error:", mailError.message);
-      // DO NOT FAIL OTP FLOW
+      // do not fail OTP flow
     }
 
-    /* ---------- ALWAYS SUCCESS IF OTP SAVED ---------- */
     return reply.send({ message: "OTP sent successfully" });
 
   } catch (error) {
@@ -118,7 +123,10 @@ export const requestEmailOtp = async (req, reply) => {
 
 export const verifyOtp = async (req, reply) => {
   try {
-    const { phone, otp } = req.body;
+
+    // ⭐ ensure same type
+    const phone = Number(req.body.phone);
+    const { otp } = req.body;
 
     const customer = await Customer.findOne({ phone });
 
