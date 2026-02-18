@@ -15,6 +15,11 @@ const userSchema = new mongoose.Schema({
 const customerSchema = new mongoose.Schema({
   ...userSchema.obj,
   phone: { type: Number, required: true, unique: true },
+  // Added email to store the fallback address for future references
+  email: { type: String, unique: true, sparse: true }, 
+  // Fields for the Email OTP logic
+  otp: { type: String },
+  otpExpires: { type: Date },
   role: { type: String, enum: ["Customer"], default: "Customer" },
   liveLocation: {
     latitude: { type: Number },
