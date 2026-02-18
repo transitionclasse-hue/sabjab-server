@@ -4,61 +4,88 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// ✅ FIX: SWITCH TO PORT 587 TO STOP TIMEOUTS
+// ================= HOSTINGER PREMIUM SMTP (FINAL) =================
 const transporter = nodemailer.createTransport({
   host: "smtp.hostinger.com",
-  port: 587,               // <--- Port 587 is required for Render
-  secure: false,           // <--- Must be false for 587
+  port: 465,               // ✅ Fixed Port for SSL
+  secure: true,            // ✅ Must be true for 465
   auth: {
     user: process.env.EMAIL_USER, 
     pass: process.env.EMAIL_PASS, 
   },
   tls: {
-    rejectUnauthorized: false // <--- Prevents SSL crashes
+    rejectUnauthorized: false // ✅ Fixes SSL Handshake issues
   },
-  connectionTimeout: 10000, // <--- Stop waiting after 10 seconds
-  greetingTimeout: 10000,
-  debug: true, 
+  // ⚡ NETWORK STABILITY
+  family: 4,                  // ✅ FORCES IPv4 (Prevents the 30s Hang/Timeout)
+  connectionTimeout: 10000,   // ✅ Fail fast if connection is blocked
+  greetingTimeout: 5000,
+  
+  debug: true,                // ✅ Check Render logs for "SMTP Greeting"
   logger: true 
 });
 
 const generateTokens = (user) => {
-  const accessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1d' });
-  const refreshToken = jwt.sign({ userId: user._id, role: user.role }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '7d' });
+  const accessToken = jwt.sign(
+    { userId: user._id, role: user.role },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: '1d' }
+  );
+  const refreshToken = jwt.sign(
+    { userId: user._id, role: user.role },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: '7d' }
+  );
   return { accessToken, refreshToken };
 };
 
-// 1. REQUEST OTP
+/**
+ * 1. REQUEST EMAIL OTP
+ */
 export const requestEmailOtp = async (req, reply) => {
   try {
     const { phone, email } = req.body;
-    if (!phone || !email) return reply.status(400).send({ message: "Required" });
 
-    // Handle Duplicate Email Logic
+    if (!phone || !email) {
+      return reply.status(400).send({ message: "Phone and Email are required" });
+    }
+
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Prevent Duplicate Email for Different Phone Numbers
     const existingUser = await Customer.findOne({ email });
     if (existingUser && existingUser.phone !== phone) {
       return reply.status(400).send({ message: "Email already linked to another number." });
     }
 
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-
     let customer = await Customer.findOneAndUpdate(
       { phone },
-      { email, otp, otpExpires: Date.now() + 300000, role: "Customer" },
+      { 
+        email, 
+        otp, 
+        otpExpires: Date.now() + 300000, 
+        role: "Customer" 
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    console.log(`Sending OTP to ${email}...`);
+    console.log(`Sending professional OTP to ${email}...`);
 
-    // Send Email
+    // Send Email via Hostinger
     await transporter.sendMail({
       from: `"SabJab Secure" <${process.env.EMAIL_USER}>`, 
       to: email,
       subject: "SabJab Login Code",
-      text: `Your login code is ${otp}`
+      text: `Your login code is ${otp}. Valid for 5 minutes.`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px; color: #333;">
+          <h2 style="color: #FFB300;">SabJab Verification</h2>
+          <p>Use the code below to access your account:</p>
+          <h1 style="letter-spacing: 5px; background: #f4f4f4; padding: 15px; display: inline-block;">${otp}</h1>
+        </div>
+      `
     });
 
-    console.log("Email Sent Successfully!");
     return reply.send({ message: "OTP sent successfully" });
 
   } catch (error) {
@@ -67,7 +94,9 @@ export const requestEmailOtp = async (req, reply) => {
   }
 };
 
-// 2. VERIFY OTP
+/**
+ * 2. VERIFY OTP
+ */
 export const verifyOtp = async (req, reply) => {
   try {
     const { phone, otp } = req.body;
@@ -89,7 +118,43 @@ export const verifyOtp = async (req, reply) => {
   }
 };
 
-// ... (Keep existing loginDeliveryPartner, refreshToken, fetchUser)
-export const loginDeliveryPartner = async (req, reply) => { /* Your existing code */ };
-export const refreshToken = async (req, reply) => { /* Your existing code */ };
-export const fetchUser = async (req, reply) => { /* Your existing code */ };
+// ... Keep existing loginDeliveryPartner, refreshToken, fetchUser
+export const loginDeliveryPartner = async (req, reply) => {
+    try {
+        const { email, password } = req.body;
+        const deliveryPartner = await DeliveryPartner.findOne({ email });
+        if (!deliveryPartner || password !== deliveryPartner.password) {
+            return reply.status(400).send({ message: "Invalid Credentials" });
+        }
+        const tokens = generateTokens(deliveryPartner);
+        return reply.send({ message: "Login Successful", ...tokens, deliveryPartner });
+    } catch (error) {
+        return reply.status(500).send({ message: "An error occurred", error });
+    }
+};
+
+export const refreshToken = async (req, reply) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return reply.status(401).send({ message: "Required" });
+    try {
+        const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+        const Model = decoded.role === "Customer" ? Customer : DeliveryPartner;
+        const user = await Model.findById(decoded.userId);
+        if (!user) return reply.status(403).send({ message: "User not found" });
+        return reply.send(generateTokens(user));
+    } catch (error) {
+        return reply.status(403).send({ message: "Invalid Token" });
+    }
+};
+
+export const fetchUser = async (req, reply) => {
+    try {
+        const { userId, role } = req.user;
+        const Model = role === "Customer" ? Customer : DeliveryPartner;
+        const user = await Model.findById(userId);
+        if (!user) return reply.status(404).send({ message: "Not found" });
+        return reply.send({ message: "Fetched", user });
+    } catch (error) {
+        return reply.status(500).send({ message: "Error", error });
+    }
+};
