@@ -15,9 +15,9 @@ const userSchema = new mongoose.Schema({
 const customerSchema = new mongoose.Schema({
   ...userSchema.obj,
   phone: { type: Number, required: true, unique: true },
-  // Added email to store the fallback address for future references
+  // Added email with sparse:true to allow multiple nulls but unique values
   email: { type: String, unique: true, sparse: true }, 
-  // Fields for the Email OTP logic
+  // Temporary storage for Email OTP fallback
   otp: { type: String },
   otpExpires: { type: Date },
   role: { type: String, enum: ["Customer"], default: "Customer" },
