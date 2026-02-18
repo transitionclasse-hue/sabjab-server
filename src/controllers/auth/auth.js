@@ -6,7 +6,7 @@ dotenv.config();
 
 // ================= HOSTINGER VERIFIED SMTP =================
 const transporter = nodemailer.createTransport({
-  host: "smtp.hostinger.com",
+  host: "smtp.hostinger.com", //
   port: 465,                  //
   secure: true,               //
   auth: {
@@ -31,7 +31,7 @@ export const requestEmailOtp = async (req, reply) => {
     const { phone, email } = req.body;
     if (!phone || !email) return reply.status(400).send({ message: "Required" });
 
-    // Prevent DuplicateKey error from your logs
+    // Handle duplicate emails to prevent DuplicateKey crashes
     const existingUser = await Customer.findOne({ email });
     if (existingUser && existingUser.phone !== phone) {
       return reply.status(400).send({ message: "Email already linked to another number." });
@@ -44,18 +44,18 @@ export const requestEmailOtp = async (req, reply) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    // Attempting connection to Hostinger
+    // Sending via Hostinger
     await transporter.sendMail({
       from: `"SabJab Secure" <${process.env.EMAIL_USER}>`, 
       to: email,
-      subject: "SabJab Verification",
+      subject: "Verification Code",
       text: `Your login code is ${otp}`
     });
 
     return reply.send({ message: "OTP sent successfully" });
   } catch (error) {
-    console.error("SMTP Connection Error:", error.message);
-    return reply.status(500).send({ message: "Server connection to Email failed", error: error.message });
+    console.error("SMTP Error:", error.message);
+    return reply.status(500).send({ message: "Email Failed", error: error.message });
   }
 };
 
@@ -83,3 +83,4 @@ export const fetchUser = async (req, reply) => {
 
 export const loginDeliveryPartner = async (req, reply) => { /* logic */ };
 export const refreshToken = async (req, reply) => { /* logic */ };
+
