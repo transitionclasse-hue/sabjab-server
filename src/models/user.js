@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
-// ================= BASE USER =================
+// ================= BASE USER SCHEMA =================
+/**
+ * Base schema shared across all user roles.
+ * Note: 'address' string removed to use relational Address.js model instead.
+ */
 const userSchema = new mongoose.Schema({
   name: { type: String },
   role: {
@@ -11,13 +15,16 @@ const userSchema = new mongoose.Schema({
   isActivated: { type: Boolean, default: false },
 });
 
-// ================= CUSTOMER =================
+// ================= CUSTOMER MODEL =================
+/**
+ * Customer specific data.
+ * The 'address' field is now handled by the separate Address collection.
+ * Linkage is done via Address.customer -> Customer._id
+ */
 const customerSchema = new mongoose.Schema({
   ...userSchema.obj,
   phone: { type: Number, required: true, unique: true },
-  // Added email with sparse:true to allow multiple nulls but unique values
   email: { type: String, unique: true, sparse: true }, 
-  // Temporary storage for Email OTP fallback
   otp: { type: String },
   otpExpires: { type: Date },
   role: { type: String, enum: ["Customer"], default: "Customer" },
@@ -25,10 +32,15 @@ const customerSchema = new mongoose.Schema({
     latitude: { type: Number },
     longitude: { type: Number },
   },
-  address: { type: String },
+  // Deprecated: address: { type: String } 
+  // We rely on the Address model for saved locations.
 });
 
-// ================= DELIVERY PARTNER =================
+// ================= DELIVERY PARTNER MODEL =================
+/**
+ * Delivery Partner specific data.
+ * Includes live tracking coordinates and branch association.
+ */
 const deliveryPartnerSchema = new mongoose.Schema({
   ...userSchema.obj,
   email: { type: String, required: true, unique: true },
@@ -43,14 +55,13 @@ const deliveryPartnerSchema = new mongoose.Schema({
     latitude: { type: Number },
     longitude: { type: Number },
   },
-  address: { type: String },
   branch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Branch",
   },
 });
 
-// ================= ADMIN =================
+// ================= ADMIN MODEL =================
 const adminSchema = new mongoose.Schema({
   ...userSchema.obj,
   email: { type: String, required: true, unique: true },
@@ -58,7 +69,7 @@ const adminSchema = new mongoose.Schema({
   role: { type: String, enum: ["Admin"], default: "Admin" },
 });
 
-// ================= MODELS =================
+// ================= EXPORTS =================
 export const Customer = mongoose.model("Customer", customerSchema);
 export const DeliveryPartner = mongoose.model("DeliveryPartner", deliveryPartnerSchema);
 export const Admin = mongoose.model("Admin", adminSchema);
