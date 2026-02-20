@@ -12,25 +12,26 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
 const start = async () => {
-  // ---------------- CONNECT DB ----------------
+  // ---------------- 1. CONNECT DB ----------------
   await connectDB(MONGO_URI);
 
   const app = Fastify({
     logger: true
   });
 
-  // ---------------- COOKIE + SESSION ----------------
+  // ---------------- 2. COOKIE + SESSION ----------------
   await app.register(fastifyCookie);
   await app.register(fastifySession, {
-    secret: process.env.COOKIE_PASSWORD, // MUST be 32+ chars
+    // Note: COOKIE_PASSWORD must be at least 32 characters long
+    secret: process.env.COOKIE_PASSWORD || "a_very_long_secret_string_32_chars_min", 
     cookie: {
-      secure: false, // true only for https
+      secure: process.env.NODE_ENV === "production", // true if on Render/Production
       httpOnly: true
     },
     saveUninitialized: false
   });
 
-  // ---------------- SOCKET.IO ----------------
+  // ---------------- 3. SOCKET.IO ----------------
   await app.register(fastifySocketIO, {
     cors: {
       origin: "*"
@@ -40,18 +41,25 @@ const start = async () => {
     transports: ['websocket']
   });
 
-  // ---------------- ROUTES ----------------
-  await registerRoutes(app);
+  // ---------------- 4. ROUTES (CORRECTED) ----------------
+  // We register routes with the "/api" prefix so they match your frontend calls.
+  // Instead of registerRoutes(app), we use the proper Fastify plugin registration.
+  await app.register(registerRoutes, { prefix: "/api" });
 
-  // ---------------- ADMIN PANEL ----------------
+  // ---------------- 5. ADMIN PANEL ----------------
+  // This usually needs to stay separate from the /api prefix
   await buildAdminRouter(app);
 
-  // ---------------- START SERVER ----------------
-  await app.listen({ port: PORT, host: "0.0.0.0" });
+  // ---------------- 6. START SERVER ----------------
+  try {
+    await app.listen({ port: PORT, host: "0.0.0.0" });
+    console.log(`✅ SabJab Backend running on http://localhost:${PORT}`);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
 
-  console.log(`✅ SabJab Backend running on http://localhost:${PORT}`);
-
-  // ---------------- SOCKET LOGIC ----------------
+  // ---------------- 7. SOCKET LOGIC ----------------
   app.ready().then(() => {
     app.io.on("connection", (socket) => {
       console.log("🟢 User Connected");
