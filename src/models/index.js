@@ -4,6 +4,7 @@ import Product from "./products.js";
 import Category from "./category.js";
 import Order from "./order.js";
 import Counter from "./counter.js";
+import Address from "./Address.js"; // ✅ Added
 
 export {
   Order,
@@ -14,4 +15,5 @@ export {
   Admin,
   Product,
   Category,
+  Address, // ✅ Added
 };
