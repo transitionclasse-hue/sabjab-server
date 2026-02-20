@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 const addressSchema = new mongoose.Schema({
+  // Connects the address to the Customer profile
   customer: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Customer", 
@@ -12,6 +13,7 @@ const addressSchema = new mongoose.Schema({
     enum: ["Home", "Work", "Hotel", "Other"],
     default: "Home" 
   },
+  // Detailed fields for professional data management
   houseNo: { type: String, required: true },
   area: { type: String, required: true },
   landmark: { type: String },
@@ -20,6 +22,5 @@ const addressSchema = new mongoose.Schema({
   longitude: { type: Number, required: true }
 }, { timestamps: true });
 
-// Using default export to match your index.js pattern
 const Address = mongoose.model("Address", addressSchema);
 export default Address;
