@@ -1,42 +1,16 @@
+import { addAddress, getCustomerAddresses } from "../controllers/addressController.js";
+import { verifyToken } from "../middleware/authMiddleware.js"; // Assuming this is your middleware path
+
 export const addressRoutes = async (fastify) => {
-  fastify.post("/address", async (request, reply) => {
-    try {
-      const {
-        house,
-        street,
-        city,
-        address,
-        latitude,
-        longitude,
-      } = request.body;
+  // 1. Protection: Only logged-in users can access these routes
+  // This ensures request.user.id is available
+  fastify.addHook("preHandler", verifyToken);
 
-      // basic validation
-      if (!address || !latitude || !longitude) {
-        return reply.status(400).send({
-          message: "Missing required fields",
-        });
-      }
+  // 2. The Path: POST sabjab.com/api/address
+  // This calls the 'addAddress' function in your controller
+  fastify.post("/", addAddress);
 
-      // TEMP: just return success
-      // Later you can save into MongoDB
-
-      return {
-        success: true,
-        message: "Address saved successfully",
-        data: {
-          house,
-          street,
-          city,
-          address,
-          latitude,
-          longitude,
-        },
-      };
-    } catch (err) {
-      console.log(err);
-      return reply.status(500).send({
-        message: "Server error",
-      });
-    }
-  });
+  // 3. The Path: GET sabjab.com/api/address
+  // This lets the user see their saved address book
+  fastify.get("/", getCustomerAddresses);
 };
