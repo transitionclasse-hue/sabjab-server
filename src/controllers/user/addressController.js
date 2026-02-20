@@ -1,7 +1,8 @@
-const Address = require("../models/Address");
+// 1. ESM uses 'import' instead of 'require'
+import Address from "../models/Address.js";
 
 // SAVE NEW ADDRESS
-const addAddress = async (request, reply) => {
+export const addAddress = async (request, reply) => {
   try {
     const { label, houseNo, area, landmark, latitude, longitude } = request.body;
     
@@ -35,7 +36,7 @@ const addAddress = async (request, reply) => {
 };
 
 // FETCH ALL SAVED ADDRESSES
-const getCustomerAddresses = async (request, reply) => {
+export const getCustomerAddresses = async (request, reply) => {
   try {
     const addresses = await Address.find({ customer: request.user.id }).sort({ createdAt: -1 });
     return reply.send({ success: true, addresses });
@@ -44,4 +45,4 @@ const getCustomerAddresses = async (request, reply) => {
   }
 };
 
-module.exports = { addAddress, getCustomerAddresses };
+// ESM uses 'export const' at the top of the functions instead of module.exports at the bottom
